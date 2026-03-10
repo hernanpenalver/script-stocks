@@ -42,7 +42,7 @@ def main():
     print("=" * 60)
 
     # 1. Download data
-    all_symbols = config.SYMBOLS_USA + config.SYMBOLS_ARG
+    all_symbols = config.SYMBOLS_USA + config.SYMBOLS_ARG + config.SYMBOLS_ETF
     prices = download_prices(all_symbols, config.START_DATE, config.END_DATE)
 
     if not prices:

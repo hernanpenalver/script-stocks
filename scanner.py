@@ -157,7 +157,7 @@ def main():
     # 1. Download prices from 2015 to today
     #    Using the full historical window keeps metrics and MACD-Opt params
     #    consistent with the backtest report.
-    all_symbols = config.SYMBOLS_USA + config.SYMBOLS_ARG
+    all_symbols = config.SYMBOLS_USA + config.SYMBOLS_ARG + config.SYMBOLS_ETF
     print(f"\nDownloading {config.START_DATE} to {end_date} ...")
     prices_dict = download_prices(all_symbols, config.START_DATE, end_date)
     if not prices_dict:
