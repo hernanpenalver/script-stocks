@@ -211,7 +211,10 @@ def main():
         sigs = r["signals"]
         if len(sigs) < 2:
             continue
-        prev, curr = int(sigs.iloc[-2]), int(sigs.iloc[-1])
+        prev_val, curr_val = sigs.iloc[-2], sigs.iloc[-1]
+        if pd.isna(prev_val) or pd.isna(curr_val):
+            continue
+        prev, curr = int(prev_val), int(curr_val)
         if   curr == 1 and prev == 0:
             signal_type = "BUY"
         elif curr == 0 and prev == 1:

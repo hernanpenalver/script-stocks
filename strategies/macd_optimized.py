@@ -45,6 +45,7 @@ class MACDOptimized(BaseStrategy):
 
     def __init__(self, train_ratio: float = 0.70):
         self.train_ratio = train_ratio
+        self._last_params = None
 
     @property
     def name(self) -> str:

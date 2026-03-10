@@ -83,9 +83,6 @@ def _compute_metrics(
     calmar = (cagr / abs(max_drawdown)) if max_drawdown != 0 else 0.0
 
     # Trade statistics
-    position_changes = strategy_returns.ne(0).astype(int)
-    trade_returns = []
-    in_trade_returns = []
     # Reconstruct individual trade P&L using the position signal (not returns,
     # which can be 0 even while in a trade if the daily price didn't change).
     entry_idx = None

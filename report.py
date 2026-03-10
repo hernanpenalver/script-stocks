@@ -419,7 +419,7 @@ def _build_sp500_comparison(df: pd.DataFrame, sp500_metrics: dict) -> go.Figure:
     return fig
 
 
-def generate_report(results: dict, output_path: str = "reporte.html", sp500_benchmark: dict | None = None) -> None:
+def generate_report(results: dict, output_path: str = "reporte.html", sp500_benchmark: dict | None = None) -> str:
     """
     Generate a self-contained interactive HTML report.
 
