@@ -16,6 +16,7 @@ from strategies import (
     MACDWithStopLoss,
     MACDOptimized,
     BollingerBands,
+    RSIBollinger,
 )
 
 
@@ -31,6 +32,7 @@ def build_strategies():
         MACDWithStopLoss(fast=12, slow=26, signal=9, sl_threshold=0.005),
         MACDOptimized(train_ratio=0.70),
         BollingerBands(period=20, num_std=2.0),
+        RSIBollinger(bb_period=20, bb_std=2.0, rsi_period=14, oversold=30, overbought=70),
     ]
 
 

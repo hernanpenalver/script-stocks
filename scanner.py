@@ -46,6 +46,7 @@ from strategies import (
     MACDOptimized,
     MACDStrategy,
     MACDWithStopLoss,
+    RSIBollinger,
     RSIPercentile,
     RSIStrategy,
     RSIWithStopLoss,
@@ -53,7 +54,8 @@ from strategies import (
 )
 
 # ── Settings ───────────────────────────────────────────────────────────────────
-SCORE_THRESHOLD = 1.2       # only notify strategies with Composite Score above this
+SCORE_THRESHOLD = 1.2       # notify if Composite Score above this ...
+WIN_RATE_THRESHOLD = 80.0   # ... OR historical win rate above this (%)
 
 
 def _build_strategies():
@@ -68,6 +70,7 @@ def _build_strategies():
         MACDWithStopLoss(fast=12, slow=26, signal=9, sl_threshold=0.005),
         MACDOptimized(train_ratio=0.70),
         BollingerBands(period=20, num_std=2.0),
+        RSIBollinger(bb_period=20, bb_std=2.0, rsi_period=14, oversold=30, overbought=70),
     ]
 
 
@@ -190,15 +193,20 @@ def main():
 
     # 3. Composite scores
     scores = _compute_scores(results_flat)
-    above  = sum(1 for s in scores.values() if s >= SCORE_THRESHOLD)
-    print(f"\nStrategies above threshold (score > {SCORE_THRESHOLD}): {above}/{total}")
+    above  = sum(
+        1 for r in results_flat
+        if scores.get((r["symbol"], r["strat_name"]), 0.0) >= SCORE_THRESHOLD
+        or r["metrics"]["Win Rate"] >= WIN_RATE_THRESHOLD
+    )
+    print(f"\nStrategies passing filter (score > {SCORE_THRESHOLD} OR win rate > {WIN_RATE_THRESHOLD}%): {above}/{total}")
 
     # 4. Detect signal changes (yesterday → today)
     new_signals = []
     for r in results_flat:
-        key   = (r["symbol"], r["strat_name"])
-        score = scores.get(key, 0.0)
-        if score < SCORE_THRESHOLD:
+        key      = (r["symbol"], r["strat_name"])
+        score    = scores.get(key, 0.0)
+        win_rate = r["metrics"]["Win Rate"]
+        if score < SCORE_THRESHOLD and win_rate < WIN_RATE_THRESHOLD:
             continue
         sigs = r["signals"]
         if len(sigs) < 2:

@@ -5,6 +5,7 @@ from .rsi_percentile import RSIPercentile
 from .macd import MACDStrategy, MACDWithStopLoss
 from .macd_optimized import MACDOptimized
 from .bollinger import BollingerBands
+from .rsi_bollinger import RSIBollinger
 
 __all__ = [
     "BuyAndHold",
@@ -16,4 +17,5 @@ __all__ = [
     "MACDWithStopLoss",
     "MACDOptimized",
     "BollingerBands",
+    "RSIBollinger",
 ]
