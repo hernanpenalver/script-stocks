@@ -231,7 +231,14 @@ def main():
     print(f"New signals detected: {len(new_signals)}\n")
 
     if not new_signals:
-        print("No new buy/exit signals above threshold. Nothing sent.")
+        msg = (
+            f"📊 <b>Scanner — {run_date}</b>\n\n"
+            f"Sin señales nuevas de BUY/EXIT.\n"
+            f"Estrategias analizadas: {total}\n"
+            f"Pasaron filtro: {above}"
+        )
+        _send_telegram(msg)
+        print("No new buy/exit signals above threshold. Notification sent.")
         return
 
     # 5. Send Telegram notifications
