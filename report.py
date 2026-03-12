@@ -150,8 +150,10 @@ def _build_equity_curves(results: dict, sp500_equity: pd.Series | None = None) -
     )
 
     palette = px.colors.qualitative.Plotly
-    strategy_names = list(next(iter(results.values())).keys())
-    colour_map = {s: palette[i % len(palette)] for i, s in enumerate(strategy_names)}
+    all_strategy_names = list(dict.fromkeys(
+        s for strats in results.values() for s in strats.keys()
+    ))
+    colour_map = {s: palette[i % len(palette)] for i, s in enumerate(all_strategy_names)}
     shown_legends = set()
 
     for idx, (symbol, strats) in enumerate(results.items()):
@@ -217,8 +219,10 @@ def _build_drawdown_chart(results: dict, sp500_equity: pd.Series | None = None) 
     )
 
     palette = px.colors.qualitative.Plotly
-    strategy_names = list(next(iter(results.values())).keys())
-    colour_map = {s: palette[i % len(palette)] for i, s in enumerate(strategy_names)}
+    all_strategy_names = list(dict.fromkeys(
+        s for strats in results.values() for s in strats.keys()
+    ))
+    colour_map = {s: palette[i % len(palette)] for i, s in enumerate(all_strategy_names)}
     shown_legends = set()
 
     for idx, (symbol, strats) in enumerate(results.items()):
@@ -319,17 +323,32 @@ def _build_ranking(df: pd.DataFrame) -> go.Figure:
 
 def _build_yearly_heatmap(results: dict) -> go.Figure:
     """Heatmap of annual returns: one subplot per strategy, rows=symbols, cols=years."""
-    strategy_names = list(next(iter(results.values())).keys())
     symbols = list(results.keys())
 
+    # Separate universal strategies (present in all symbols) from per-symbol ones (pairs)
+    universal = []
+    per_symbol = []
+    all_names = list(dict.fromkeys(
+        s for strats in results.values() for s in strats.keys()
+    ))
+    for name in all_names:
+        count = sum(1 for sym in symbols if name in results[sym])
+        if count == len(symbols):
+            universal.append(name)
+        else:
+            per_symbol.append(name)
+
+    # Build heatmaps only for universal strategies
+    strategy_names = universal
     ncols = min(2, len(strategy_names))
     nrows = -(-len(strategy_names) // ncols)
+    vspacing = min(0.06, 0.8 / max(nrows, 1))
 
     fig = make_subplots(
         rows=nrows,
         cols=ncols,
         subplot_titles=strategy_names,
-        vertical_spacing=0.08,
+        vertical_spacing=vspacing,
         horizontal_spacing=0.06,
     )
 
@@ -337,11 +356,10 @@ def _build_yearly_heatmap(results: dict) -> go.Figure:
         row = idx // ncols + 1
         col = idx % ncols + 1
 
-        # Build matrix: rows=symbols, cols=years
         matrix = []
         years = None
         for symbol in symbols:
-            yr = results[symbol][strat_name]["yearly"] * 100  # as %
+            yr = results[symbol][strat_name]["yearly"] * 100
             if years is None:
                 years = sorted(yr.index.tolist())
             matrix.append([yr.get(y, float("nan")) for y in years])
@@ -374,11 +392,22 @@ def _build_yearly_heatmap(results: dict) -> go.Figure:
             col=col,
         )
 
+    height_per_row = max(400, 50 * len(symbols))
     fig.update_layout(
         title="<b>Annual Returns by Strategy & Symbol</b> — Red=Loss, Green=Gain",
-        height=max(400, 60 * len(symbols)) * nrows,
+        height=height_per_row * nrows,
     )
+
+    # Add pairs trading heatmaps as a separate section if any exist
+    if per_symbol:
+        _add_pairs_annotations(fig, per_symbol, results, symbols)
+
     return fig
+
+
+def _add_pairs_annotations(fig, per_symbol_names, results, symbols):
+    """No-op placeholder — pairs are shown in equity curves and summary table."""
+    pass
 
 
 def _build_sp500_comparison(df: pd.DataFrame, sp500_metrics: dict) -> go.Figure:
@@ -449,10 +478,10 @@ def generate_report(results: dict, output_path: str = "reporte.html", sp500_benc
     if sp500_benchmark is not None:
         sections.append(("vs S&P 500", _build_sp500_comparison(df, sp500_benchmark["metrics"])))
     sections += [
-        ("Annual Returns Heatmap", fig_yearly),
         ("Performance Summary Table", fig_table),
         ("Equity Curves", fig_equity),
         ("Drawdown Analysis", fig_dd),
+        ("Annual Returns Heatmap", fig_yearly),
     ]
 
     sp500_subtitle = (

@@ -17,11 +17,25 @@ from strategies import (
     MACDOptimized,
     BollingerBands,
     RSIBollinger,
+    Momentum,
+    DonchianBreakout,
+    ADXTrend,
+    MeanReversion,
+    PairsTrading,
 )
 
+# Pairs to trade: (asset_A, asset_B) — strategy runs on A, using B as reference
+PAIRS = [
+    ("AAPL", "MSFT"),    # Tech giants, highly correlated
+    ("GOOGL", "META"),   # Digital advertising peers
+    ("JPM", "BMA"),      # Banks: US vs Argentina
+    ("GGAL", "BMA"),     # Argentine banks
+    ("YPF", "XOM"),      # Energy: Argentina vs US
+]
 
-def build_strategies():
-    return [
+
+def build_strategies(prices: dict = None):
+    base = [
         BuyAndHold(),
         SMACrossover(fast=20, slow=50),
         SMACrossover(fast=50, slow=200),
@@ -33,7 +47,27 @@ def build_strategies():
         MACDOptimized(train_ratio=0.70),
         BollingerBands(period=20, num_std=2.0),
         RSIBollinger(bb_period=20, bb_std=2.0, rsi_period=14, oversold=30, overbought=70),
+        Momentum(lookback=252, skip=21),
+        DonchianBreakout(entry_period=20, exit_period=10),
+        DonchianBreakout(entry_period=55, exit_period=20),
+        ADXTrend(period=14, threshold=25),
+        MeanReversion(period=20, entry_std=1.5),
+        MeanReversion(period=50, entry_std=2.0),
     ]
+
+    # Build pairs trading strategies (only for symbols that have a pair)
+    pairs_strategies = {}
+    if prices:
+        for sym_a, sym_b in PAIRS:
+            if sym_a in prices and sym_b in prices:
+                pairs_strategies[sym_a] = PairsTrading(
+                    pair_prices=prices[sym_b], pair_name=sym_b,
+                )
+                pairs_strategies[sym_b] = PairsTrading(
+                    pair_prices=prices[sym_a], pair_name=sym_a,
+                )
+
+    return base, pairs_strategies
 
 
 def main():
@@ -63,14 +97,28 @@ def main():
         print("  [WARN] Could not download S&P 500 data.")
 
     # 3. Build strategies
-    strategies = build_strategies()
-    print(f"\nStrategies: {[s.name for s in strategies]}")
+    base_strategies, pairs_strategies = build_strategies(prices)
+    print(f"\nStrategies: {[s.name for s in base_strategies]}")
+    if pairs_strategies:
+        print(f"Pairs:      {[(s, ps.name) for s, ps in pairs_strategies.items()]}")
     print(f"Symbols:    {list(prices.keys())}")
     print(f"Capital:    ${config.INITIAL_CAPITAL:,.0f}\n")
 
     # 4. Run backtests
     print("Running backtests ...")
-    results = run_all(prices, strategies, config.INITIAL_CAPITAL)
+    results = run_all(prices, base_strategies, config.INITIAL_CAPITAL)
+
+    # 4b. Run pairs trading backtests
+    if pairs_strategies:
+        from backtester import run_backtest
+        print("\nRunning pairs trading backtests ...")
+        for symbol, pair_strat in pairs_strategies.items():
+            if symbol in prices:
+                result = run_backtest(prices[symbol], pair_strat, config.INITIAL_CAPITAL)
+                results[symbol][pair_strat.name] = result
+                print(f"  {symbol} | {pair_strat.name} | "
+                      f"Return={result['metrics']['Total Return']}% "
+                      f"Sharpe={result['metrics']['Sharpe']}")
 
     # 5. Generate report
     output_path = os.path.join(os.path.dirname(__file__), "reporte.html")

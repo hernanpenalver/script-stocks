@@ -6,6 +6,11 @@ from .macd import MACDStrategy, MACDWithStopLoss
 from .macd_optimized import MACDOptimized
 from .bollinger import BollingerBands
 from .rsi_bollinger import RSIBollinger
+from .momentum import Momentum
+from .donchian import DonchianBreakout
+from .adx import ADXTrend
+from .mean_reversion import MeanReversion
+from .pairs_trading import PairsTrading
 
 __all__ = [
     "BuyAndHold",
@@ -18,4 +23,9 @@ __all__ = [
     "MACDOptimized",
     "BollingerBands",
     "RSIBollinger",
+    "Momentum",
+    "DonchianBreakout",
+    "ADXTrend",
+    "MeanReversion",
+    "PairsTrading",
 ]
