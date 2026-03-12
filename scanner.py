@@ -41,11 +41,16 @@ import config
 from backtester import run_backtest
 from data_loader import download_prices
 from strategies import (
+    ADXTrend,
     BollingerBands,
     BuyAndHold,
+    DonchianBreakout,
     MACDOptimized,
     MACDStrategy,
     MACDWithStopLoss,
+    MeanReversion,
+    Momentum,
+    PairsTrading,
     RSIBollinger,
     RSIPercentile,
     RSIStrategy,
@@ -56,6 +61,15 @@ from strategies import (
 # ── Settings ───────────────────────────────────────────────────────────────────
 SCORE_THRESHOLD = 1.2       # notify if Composite Score above this ...
 WIN_RATE_THRESHOLD = 80.0   # ... OR historical win rate above this (%)
+
+# Pairs to trade: (asset_A, asset_B)
+PAIRS = [
+    ("AAPL", "MSFT"),
+    ("GOOGL", "META"),
+    ("JPM", "BMA"),
+    ("GGAL", "BMA"),
+    ("YPF", "XOM"),
+]
 
 
 def _build_strategies():
@@ -71,7 +85,27 @@ def _build_strategies():
         MACDOptimized(train_ratio=0.70),
         BollingerBands(period=20, num_std=2.0),
         RSIBollinger(bb_period=20, bb_std=2.0, rsi_period=14, oversold=30, overbought=70),
+        Momentum(lookback=252, skip=21),
+        DonchianBreakout(entry_period=20, exit_period=10),
+        DonchianBreakout(entry_period=55, exit_period=20),
+        ADXTrend(period=14, threshold=25),
+        MeanReversion(period=20, entry_std=1.5),
+        MeanReversion(period=50, entry_std=2.0),
     ]
+
+
+def _build_pairs_strategies(prices_dict: dict) -> dict:
+    """Build per-symbol pairs trading strategies."""
+    pairs_strategies = {}
+    for sym_a, sym_b in PAIRS:
+        if sym_a in prices_dict and sym_b in prices_dict:
+            pairs_strategies[sym_a] = PairsTrading(
+                pair_prices=prices_dict[sym_b], pair_name=sym_b,
+            )
+            pairs_strategies[sym_b] = PairsTrading(
+                pair_prices=prices_dict[sym_a], pair_name=sym_a,
+            )
+    return pairs_strategies
 
 
 # ── Composite score ────────────────────────────────────────────────────────────
@@ -166,9 +200,10 @@ def main():
 
     # 2. Run backtests (metrics + signals)
     strategies = _build_strategies()
-    total = len(prices_dict) * len(strategies)
+    pairs_strategies = _build_pairs_strategies(prices_dict)
+    total = len(prices_dict) * len(strategies) + len(pairs_strategies)
     print(f"Running {len(strategies)} strategies × {len(prices_dict)} symbols "
-          f"({total} backtests) ...\n")
+          f"+ {len(pairs_strategies)} pairs ({total} backtests) ...\n")
 
     results_flat = []
     done = 0
@@ -184,6 +219,21 @@ def main():
                 "symbol":      symbol,
                 "strat_name":  strat.name,
                 "strat_label": strat_label,
+                "metrics":     result["metrics"],
+                "signals":     result["signals"],
+            })
+            done += 1
+            if done % 10 == 0:
+                print(f"  {done}/{total} done ...")
+
+    # 2b. Run pairs trading backtests
+    for symbol, pair_strat in pairs_strategies.items():
+        if symbol in prices_dict:
+            result = run_backtest(prices_dict[symbol], pair_strat, config.INITIAL_CAPITAL)
+            results_flat.append({
+                "symbol":      symbol,
+                "strat_name":  pair_strat.name,
+                "strat_label": pair_strat.name,
                 "metrics":     result["metrics"],
                 "signals":     result["signals"],
             })
