@@ -43,3 +43,41 @@ def download_prices(symbols: list[str], start: str, end: str) -> dict[str, pd.Se
 
     print(f"  Downloaded {len(prices)} symbols successfully.")
     return prices
+
+
+def download_ohlcv(symbols: list[str], start: str, end: str) -> dict[str, pd.DataFrame]:
+    """
+    Download full OHLCV data for a list of symbols.
+
+    Returns a dict mapping symbol → pd.DataFrame with columns:
+    Open, High, Low, Close, Volume.
+    """
+    print(f"Downloading OHLCV for {len(symbols)} symbols ({start} to {end}) ...")
+    raw = yf.download(
+        tickers=symbols,
+        start=start,
+        end=end,
+        auto_adjust=True,
+        progress=False,
+    )
+
+    ohlcv: dict[str, pd.DataFrame] = {}
+
+    if isinstance(raw.columns, pd.MultiIndex):
+        for sym in symbols:
+            try:
+                df = pd.DataFrame({
+                    col: raw[col][sym] for col in ["Open", "High", "Low", "Close", "Volume"]
+                }).dropna()
+                if len(df) > 0:
+                    ohlcv[sym] = df
+            except KeyError:
+                print(f"  [WARN] No OHLCV data for {sym}, skipping.")
+    else:
+        sym = symbols[0]
+        df = raw[["Open", "High", "Low", "Close", "Volume"]].dropna()
+        if len(df) > 0:
+            ohlcv[sym] = df
+
+    print(f"  Downloaded OHLCV for {len(ohlcv)} symbols.")
+    return ohlcv

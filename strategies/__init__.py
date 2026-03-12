@@ -11,6 +11,7 @@ from .donchian import DonchianBreakout
 from .adx import ADXTrend
 from .mean_reversion import MeanReversion
 from .pairs_trading import PairsTrading
+from .volume_profile import VolumeProfile
 
 __all__ = [
     "BuyAndHold",
@@ -28,4 +29,5 @@ __all__ = [
     "ADXTrend",
     "MeanReversion",
     "PairsTrading",
+    "VolumeProfile",
 ]

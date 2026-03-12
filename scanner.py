@@ -39,7 +39,7 @@ import requests
 
 import config
 from backtester import run_backtest
-from data_loader import download_prices
+from data_loader import download_prices, download_ohlcv
 from strategies import (
     ADXTrend,
     BollingerBands,
@@ -56,6 +56,7 @@ from strategies import (
     RSIStrategy,
     RSIWithStopLoss,
     SMACrossover,
+    VolumeProfile,
 )
 
 # ── Settings ───────────────────────────────────────────────────────────────────
@@ -84,6 +85,8 @@ def _build_strategies():
         MACDWithStopLoss(fast=12, slow=26, signal=9, sl_threshold=0.005),
         MACDOptimized(train_ratio=0.70),
         BollingerBands(period=20, num_std=2.0),
+        BollingerBands(period=20, num_std=2.5, exit_at_mid=True),
+        BollingerBands(period=20, num_std=3.0, exit_at_mid=True),
         RSIBollinger(bb_period=20, bb_std=2.0, rsi_period=14, oversold=30, overbought=70),
         Momentum(lookback=252, skip=21),
         DonchianBreakout(entry_period=20, exit_period=10),
@@ -91,7 +94,20 @@ def _build_strategies():
         ADXTrend(period=14, threshold=25),
         MeanReversion(period=20, entry_std=1.5),
         MeanReversion(period=50, entry_std=2.0),
+        MeanReversion(period=20, entry_std=2.5, exit_std=0.5),
+        MeanReversion(period=50, entry_std=3.0, exit_std=0.5),
     ]
+
+
+def _build_vol_strategies(ohlcv_dict: dict) -> dict:
+    """Build per-symbol volume profile strategies."""
+    vol_strategies = {}
+    for sym, df in ohlcv_dict.items():
+        vol_strategies[sym] = [
+            VolumeProfile(volume=df["Volume"], lookback=60, exit_at="poc"),
+            VolumeProfile(volume=df["Volume"], lookback=120, exit_at="vah"),
+        ]
+    return vol_strategies
 
 
 def _build_pairs_strategies(prices_dict: dict) -> dict:
@@ -138,7 +154,8 @@ def _send_telegram(text: str) -> None:
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
         print("[WARN] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — printing to stdout.")
-        print(text)
+        safe_text = text.encode("ascii", errors="replace").decode("ascii")
+        print(safe_text)
         print()
         return
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -198,12 +215,17 @@ def main():
         print("ERROR: No data downloaded. Check internet connection.")
         sys.exit(1)
 
+    # 1b. Download OHLCV for volume profile strategies
+    ohlcv_dict = download_ohlcv(all_symbols, config.START_DATE, end_date)
+
     # 2. Run backtests (metrics + signals)
     strategies = _build_strategies()
     pairs_strategies = _build_pairs_strategies(prices_dict)
-    total = len(prices_dict) * len(strategies) + len(pairs_strategies)
+    vol_strategies = _build_vol_strategies(ohlcv_dict)
+    vol_count = sum(len(v) for v in vol_strategies.values())
+    total = len(prices_dict) * len(strategies) + len(pairs_strategies) + vol_count
     print(f"Running {len(strategies)} strategies × {len(prices_dict)} symbols "
-          f"+ {len(pairs_strategies)} pairs ({total} backtests) ...\n")
+          f"+ {len(pairs_strategies)} pairs + {vol_count} volume profile ({total} backtests) ...\n")
 
     results_flat = []
     done = 0
@@ -240,6 +262,22 @@ def main():
             done += 1
             if done % 10 == 0:
                 print(f"  {done}/{total} done ...")
+
+    # 2c. Run volume profile backtests
+    for symbol, vol_strats in vol_strategies.items():
+        if symbol in prices_dict:
+            for vs in vol_strats:
+                result = run_backtest(prices_dict[symbol], vs, config.INITIAL_CAPITAL)
+                results_flat.append({
+                    "symbol":      symbol,
+                    "strat_name":  vs.name,
+                    "strat_label": vs.name,
+                    "metrics":     result["metrics"],
+                    "signals":     result["signals"],
+                })
+                done += 1
+                if done % 10 == 0:
+                    print(f"  {done}/{total} done ...")
 
     # 3. Composite scores
     scores = _compute_scores(results_flat)
