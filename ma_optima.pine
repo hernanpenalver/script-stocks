@@ -1,0 +1,127 @@
+// ═══════════════════════════════════════════════════════════
+// Configuraciones Optimas de Medias Moviles - Multi-Activo
+// Generado por ma_optimizer.py (v2 - Anti-Overfitting)
+// ═══════════════════════════════════════════════════════════
+// MSFT  -> EMA(50, 130)  | Sharpe 0.90 | Estab 97% | Robusto 0.87
+// GOOGL -> EMA(45, 65)  | Sharpe 1.24 | Estab 93% | Robusto 1.18
+// NVDA  -> EMA(50, 55)  | Sharpe 1.53 | Estab 97% | Robusto 1.48
+// META  -> EMA(35, 60)  | Sharpe 1.31 | Estab 94% | Robusto 1.26
+// AMZN  -> SMA(15, 195)  | Sharpe 0.67 | Estab 88% | Robusto 0.62
+// MELI  -> SMA(50, 200)  | Sharpe 0.75 | Estab 91% | Robusto 0.71
+// MSTR  -> SMA(15, 195)  | Sharpe 1.12 | Estab 98% | Robusto 1.11
+// GGAL  -> WMA(15, 35)  | Sharpe 1.14 | Estab 96% | Robusto 1.02
+// BMA   -> WMA(15, 40)  | Sharpe 1.21 | Estab 88% | Robusto 1.06
+// AVGO  -> SMA(10, 140)  | Sharpe 1.29 | Estab 94% | Robusto 1.24
+// ═══════════════════════════════════════════════════════════
+
+//@version=5
+indicator("MA Optima - Multi-Activo (v2)", overlay=true)
+
+// ── Selector de activo ──
+activo = input.string("Auto-detectar", "Activo", options=["Auto-detectar", "MSFT", "GOOGL", "NVDA", "META", "AMZN", "MELI", "MSTR", "GGAL", "BMA", "AVGO", "Custom"])
+
+// ── Parametros custom (se usan si activo = "Custom") ──
+customType  = input.string("EMA", "Custom: Tipo MA", options=["SMA", "EMA", "WMA"], group="Custom")
+customShort = input.int(20, "Custom: Periodo Corta", minval=1, group="Custom")
+customLong  = input.int(50, "Custom: Periodo Larga", minval=1, group="Custom")
+
+// ── Resolucion de configuracion por activo ──
+ticker = syminfo.ticker
+
+autoDetected = ticker == "MSFT" ? "MSFT" :
+                 ticker == "GOOGL" or ticker == "GOOG" ? "GOOGL" :
+                 ticker == "NVDA" ? "NVDA" :
+                 ticker == "META" ? "META" :
+                 ticker == "AMZN" ? "AMZN" :
+                 ticker == "MELI" ? "MELI" :
+                 ticker == "MSTR" ? "MSTR" :
+                 ticker == "GGAL" ? "GGAL" :
+                 ticker == "BMA" ? "BMA" :
+                 ticker == "AVGO" ? "AVGO" :
+                 "Custom"
+
+activoFinal = activo == "Auto-detectar" ? autoDetected : activo
+
+// ── Verificar si el activo tiene configuracion optima ──
+hasConfig = activoFinal == "MSFT" or activoFinal == "GOOGL" or activoFinal == "NVDA" or activoFinal == "META" or activoFinal == "AMZN" or activoFinal == "MELI" or activoFinal == "MSTR" or activoFinal == "GGAL" or activoFinal == "BMA" or activoFinal == "AVGO" or activoFinal == "Custom"
+
+// Tipo de MA: 0=SMA, 1=EMA, 2=WMA
+tipoMA = activoFinal == "MSFT" ? 1 :
+         activoFinal == "GOOGL" ? 1 :
+         activoFinal == "NVDA" ? 1 :
+         activoFinal == "META" ? 1 :
+         activoFinal == "AMZN" ? 0 :
+         activoFinal == "MELI" ? 0 :
+         activoFinal == "MSTR" ? 0 :
+         activoFinal == "GGAL" ? 2 :
+         activoFinal == "BMA" ? 2 :
+         activoFinal == "AVGO" ? 0 :
+         customType == "EMA" ? 1 : customType == "WMA" ? 2 : 0
+
+shortLen = activoFinal == "MSFT" ? 50 :
+           activoFinal == "GOOGL" ? 45 :
+           activoFinal == "NVDA" ? 50 :
+           activoFinal == "META" ? 35 :
+           activoFinal == "AMZN" ? 15 :
+           activoFinal == "MELI" ? 50 :
+           activoFinal == "MSTR" ? 15 :
+           activoFinal == "GGAL" ? 15 :
+           activoFinal == "BMA" ? 15 :
+           activoFinal == "AVGO" ? 10 :
+           customShort
+
+longLen = activoFinal == "MSFT" ? 130 :
+          activoFinal == "GOOGL" ? 65 :
+          activoFinal == "NVDA" ? 55 :
+          activoFinal == "META" ? 60 :
+          activoFinal == "AMZN" ? 195 :
+          activoFinal == "MELI" ? 200 :
+          activoFinal == "MSTR" ? 195 :
+          activoFinal == "GGAL" ? 35 :
+          activoFinal == "BMA" ? 40 :
+          activoFinal == "AVGO" ? 140 :
+          customLong
+
+// ── Funcion WMA ──
+wma(src, len) =>
+    ta.wma(src, len)
+
+// ── Calculo de medias (solo si tiene config) ──
+maShort = hasConfig ? (tipoMA == 1 ? ta.ema(close, shortLen) : tipoMA == 2 ? wma(close, shortLen) : ta.sma(close, shortLen)) : close
+maLong  = hasConfig ? (tipoMA == 1 ? ta.ema(close, longLen)  : tipoMA == 2 ? wma(close, longLen)  : ta.sma(close, longLen))  : close
+
+// ── Colores dinamicos ──
+isBullish = maShort > maLong
+colShort = isBullish ? color.new(color.green, 0) : color.new(color.red, 0)
+colLong  = isBullish ? color.new(color.green, 50) : color.new(color.red, 50)
+fillCol  = isBullish ? color.new(color.green, 85) : color.new(color.red, 85)
+
+// ── Plots (transparentes si no tiene config) ──
+noConfigCol = color.new(color.gray, 100)
+maType = tipoMA == 1 ? "EMA" : tipoMA == 2 ? "WMA" : "SMA"
+pShort = plot(hasConfig ? maShort : na, "MA Corta", hasConfig ? colShort : noConfigCol, 2)
+pLong  = plot(hasConfig ? maLong  : na, "MA Larga", hasConfig ? colLong  : noConfigCol, 2)
+fill(pShort, pLong, hasConfig ? fillCol : noConfigCol)
+
+// ── Senales de cruce (solo si tiene config) ──
+crossUp   = hasConfig and ta.crossover(maShort, maLong)
+crossDown = hasConfig and ta.crossunder(maShort, maLong)
+
+plotshape(crossUp,   "Compra", shape.triangleup,   location.belowbar, color.green, size=size.small)
+plotshape(crossDown, "Venta",  shape.triangledown,  location.abovebar, color.red,   size=size.small)
+
+// ── Alertas ──
+alertcondition(crossUp,   "Cruce Alcista", "MA corta cruzo por encima de MA larga")
+alertcondition(crossDown, "Cruce Bajista", "MA corta cruzo por debajo de MA larga")
+
+// ── Info en pantalla (tabla en esquina superior derecha) ──
+var table infoTable = table.new(position.top_right, 1, 1, bgcolor=color.new(color.black, 30), border_width=1)
+if barstate.islast
+    txt = ""
+    if hasConfig
+        txt := activoFinal + ": " + maType + "(" + str.tostring(shortLen) + "," + str.tostring(longLen) + ")\n"
+        txt += isBullish ? "ALCISTA" : "BAJISTA"
+    else
+        txt := syminfo.ticker + "\nSin config optima de MAs"
+    bgCol = hasConfig ? (isBullish ? color.green : color.red) : color.gray
+    table.cell(infoTable, 0, 0, txt, text_color=color.white, bgcolor=bgCol, text_size=size.normal)

@@ -1,0 +1,207 @@
+//@version=6
+indicator("Trend Exhaustion Detector v3", overlay = false, max_labels_count = 500)
+
+// ============================================================
+// INPUTS
+// ============================================================
+grp_trend  = "Detección de Tendencia"
+ema_fast   = input.int(21,   "EMA rápida",              group = grp_trend)
+ema_slow   = input.int(50,   "EMA lenta",               group = grp_trend)
+swing_str  = input.int(10,   "Lookback swings (HH/LL)", group = grp_trend)
+
+grp_atr    = "ATR - Compresión de Velas"
+atr_len    = input.int(14,   "Período ATR",             group = grp_atr)
+atr_ma_len = input.int(30,   "Media ATR (referencia)",  group = grp_atr)
+atr_thresh = input.float(0.7,"Umbral compresión",       group = grp_atr, step = 0.05)
+
+grp_vol    = "Volumen Decreciente"
+vol_len    = input.int(10,   "Barras a comparar",       group = grp_vol)
+
+grp_rsi    = "Divergencias RSI"
+rsi_len    = input.int(14,   "Período RSI",             group = grp_rsi)
+div_lb     = input.int(5,    "Lookback divergencia",    group = grp_rsi)
+
+grp_macd   = "Divergencias MACD"
+macd_fast  = input.int(12,   "MACD rápida",             group = grp_macd)
+macd_slow  = input.int(26,   "MACD lenta",              group = grp_macd)
+macd_sig   = input.int(9,    "MACD señal",              group = grp_macd)
+
+grp_bos    = "Estructura de Mercado (BOS)"
+bos_len    = input.int(10,   "Swing lookback BOS",      group = grp_bos)
+
+grp_score  = "Puntuación y Alertas"
+warn_lvl   = input.int(2,    "Avisar desde puntos",     group = grp_score, minval = 1, maxval = 4)
+
+// ============================================================
+// 1. DETECCIÓN DE TENDENCIA
+// ============================================================
+ema_f    = ta.ema(close, ema_fast)
+ema_s    = ta.ema(close, ema_slow)
+ema_bull = ema_f > ema_s and close > ema_s
+ema_bear = ema_f < ema_s and close < ema_s
+
+ph = ta.pivothigh(high, swing_str, swing_str)
+pl = ta.pivotlow(low,  swing_str, swing_str)
+
+var float ph1 = na
+var float ph2 = na
+var float pl1 = na
+var float pl2 = na
+
+if not na(ph)
+    ph2 := ph1
+    ph1 := ph
+
+if not na(pl)
+    pl2 := pl1
+    pl1 := pl
+
+struct_bull = not na(ph1) and not na(ph2) and not na(pl1) and not na(pl2) and ph1 > ph2 and pl1 > pl2
+struct_bear = not na(ph1) and not na(ph2) and not na(pl1) and not na(pl2) and ph1 < ph2 and pl1 < pl2
+
+trend_bull  = ema_bull and struct_bull
+trend_bear  = ema_bear and struct_bear
+trend_mixed = (ema_bull and struct_bear) or (ema_bear and struct_bull)
+trend_dir   = trend_bull ? 1 : trend_bear ? -1 : 0
+
+// ============================================================
+// 2. ATR — COMPRESIÓN DE VELAS
+// ============================================================
+atr_val  = ta.atr(atr_len)
+atr_ma   = ta.sma(atr_val, atr_ma_len)
+atr_comp = atr_val < atr_ma * atr_thresh
+
+// ============================================================
+// 3. VOLUMEN DECRECIENTE
+// ============================================================
+vol_slope  = ta.linreg(volume, vol_len, 0)
+vol_shrink = vol_slope < 0
+
+// ============================================================
+// 4. DIVERGENCIAS RSI
+// ============================================================
+rsi      = ta.rsi(close, rsi_len)
+price_ph = ta.highestbars(high, div_lb) == 0
+price_pl = ta.lowestbars(low,  div_lb) == 0
+rsi_ph   = ta.highestbars(rsi, div_lb) == 0
+rsi_pl   = ta.lowestbars(rsi,  div_lb) == 0
+
+bear_div_rsi = price_ph and rsi_ph and high > ta.highest(high[1], div_lb) and rsi < ta.highest(rsi[1], div_lb)
+bull_div_rsi = price_pl and rsi_pl and low  < ta.lowest(low[1],  div_lb) and rsi > ta.lowest(rsi[1],  div_lb)
+
+div_rsi = trend_dir == 1 ? bear_div_rsi : trend_dir == -1 ? bull_div_rsi : bear_div_rsi or bull_div_rsi
+
+// ============================================================
+// 5. DIVERGENCIAS MACD
+// ============================================================
+[macd_line, signal_line, hist] = ta.macd(close, macd_fast, macd_slow, macd_sig)
+
+bear_div_macd = price_ph and high      > ta.highest(high[1],      div_lb) and macd_line < ta.highest(macd_line[1], div_lb)
+bull_div_macd = price_pl and low       < ta.lowest(low[1],        div_lb) and macd_line > ta.lowest(macd_line[1],  div_lb)
+
+div_macd = trend_dir == 1 ? bear_div_macd : trend_dir == -1 ? bull_div_macd : bear_div_macd or bull_div_macd
+
+// ============================================================
+// 6. BOS FALLIDO
+// ============================================================
+swing_high   = ta.highest(high, bos_len)
+swing_low    = ta.lowest(low,   bos_len)
+bos_bear_fail = high > swing_high[1] and close < swing_high[1]
+bos_bull_fail = low  < swing_low[1]  and close > swing_low[1]
+bos_fail      = trend_dir == 1 ? bos_bear_fail : trend_dir == -1 ? bos_bull_fail : bos_bear_fail or bos_bull_fail
+
+// ============================================================
+// PUNTUACIÓN (0 – 4)
+// ============================================================
+score = math.min(
+     (atr_comp  ? 1 : 0) +
+     (vol_shrink ? 1 : 0) +
+     (div_rsi   ? 1 : 0) +
+     (div_macd  ? 1 : 0) +
+     (bos_fail  ? 2 : 0),
+     4)
+
+// ============================================================
+// COLORES
+// ============================================================
+col_bull(s) =>
+    s >= 3 ? color.new(color.red,    20) :
+     s >= 2 ? color.new(color.orange, 35) :
+     s >= 1 ? color.new(color.yellow, 55) :
+              color.new(color.gray,   80)
+
+col_bear(s) =>
+    s >= 3 ? color.new(color.lime,   20) :
+     s >= 2 ? color.new(color.teal,   35) :
+     s >= 1 ? color.new(color.aqua,   55) :
+              color.new(color.gray,   80)
+
+bar_color = trend_dir == 1 ? col_bull(score) : trend_dir == -1 ? col_bear(score) : color.new(color.gray, 75)
+
+// ============================================================
+// PLOTS
+// ============================================================
+hline(0,        "Cero",   color.new(color.white, 80), linestyle = hline.style_solid)
+hline(warn_lvl, "Alerta", color.white,                linestyle = hline.style_dashed)
+hline(4,        "Máximo", color.red,                  linestyle = hline.style_dotted)
+
+plot(score,         "Score",          color = bar_color,        style = plot.style_columns, linewidth = 2)
+plot(atr_comp   ? 0.2 : na, "ATR",   color = color.aqua,       linewidth = 1, style = plot.style_circles)
+plot(vol_shrink  ? 0.4 : na, "Vol",  color = color.purple,     linewidth = 1, style = plot.style_circles)
+plot(div_rsi    ? 0.6 : na, "DRSI",  color = color.yellow,     linewidth = 1, style = plot.style_circles)
+plot(div_macd   ? 0.8 : na, "DMACD", color = color.orange,     linewidth = 1, style = plot.style_circles)
+plot(bos_fail   ? 1.0 : na, "BOS",   color = color.red,        linewidth = 2, style = plot.style_circles)
+
+// ============================================================
+// ALERTAS
+// ============================================================
+alertcondition(score >= warn_lvl and trend_dir == 1,
+     "Tendencia ALCISTA agotándose",
+     "Agotamiento en tendencia ALCISTA. Revisar tabla.")
+
+alertcondition(score >= warn_lvl and trend_dir == -1,
+     "Tendencia BAJISTA agotándose",
+     "Agotamiento en tendencia BAJISTA. Revisar tabla.")
+
+alertcondition(score == 4,
+     "Agotamiento MAXIMO — confluencia total",
+     "Todas las señales activas. Posible reversión inminente.")
+
+// ============================================================
+// TABLA RESUMEN
+// ============================================================
+trend_label  = trend_dir == 1 ? "ALCISTA" : trend_dir == -1 ? "BAJISTA" : trend_mixed ? "MIXTA" : "INDEFINIDA"
+trend_color  = trend_dir == 1 ? color.lime : trend_dir == -1 ? color.red : color.gray
+exhaust_msg  = trend_dir == 1 ? "Alcista agotandose" : trend_dir == -1 ? "Bajista agotandose" : "Sin tendencia clara"
+ema_label    = ema_bull ? "Alcista" : ema_bear ? "Bajista" : "Neutral"
+ema_col      = ema_bull ? color.lime : ema_bear ? color.red : color.gray
+struct_label = struct_bull ? "HH / HL" : struct_bear ? "LH / LL" : "Indefinida"
+struct_col   = struct_bull ? color.lime : struct_bear ? color.red : color.gray
+
+var table t = table.new(position.bottom_right, 2, 11, bgcolor = color.new(color.black, 55), border_width = 1)
+
+if barstate.islast
+    table.cell(t, 0, 0,  "TENDENCIA",    text_color = color.white,  text_size = size.small)
+    table.cell(t, 1, 0,  trend_label,    text_color = trend_color,  text_size = size.small)
+    table.cell(t, 0, 1,  "  EMA",        text_color = color.silver, text_size = size.small)
+    table.cell(t, 1, 1,  ema_label,      text_color = ema_col,      text_size = size.small)
+    table.cell(t, 0, 2,  "  Estructura", text_color = color.silver, text_size = size.small)
+    table.cell(t, 1, 2,  struct_label,   text_color = struct_col,   text_size = size.small)
+    table.cell(t, 0, 3,  "-------------",text_color = color.new(color.gray, 50), text_size = size.small)
+    table.cell(t, 1, 3,  "--------",     text_color = color.new(color.gray, 50), text_size = size.small)
+    table.cell(t, 0, 4,  "AGOTAMIENTO",  text_color = color.white,  text_size = size.small)
+    table.cell(t, 1, 4,  exhaust_msg,    text_color = trend_color,  text_size = size.small)
+    table.cell(t, 0, 5,  "  ATR Comp.",  text_color = color.silver, text_size = size.small)
+    table.cell(t, 1, 5,  atr_comp   ? "SI" : "-", text_color = atr_comp   ? color.aqua   : color.gray, text_size = size.small)
+    table.cell(t, 0, 6,  "  Vol Decr.",  text_color = color.silver, text_size = size.small)
+    table.cell(t, 1, 6,  vol_shrink  ? "SI" : "-", text_color = vol_shrink  ? color.purple : color.gray, text_size = size.small)
+    table.cell(t, 0, 7,  "  Div RSI",    text_color = color.silver, text_size = size.small)
+    table.cell(t, 1, 7,  div_rsi    ? "SI" : "-", text_color = div_rsi    ? color.yellow : color.gray, text_size = size.small)
+    table.cell(t, 0, 8,  "  Div MACD",   text_color = color.silver, text_size = size.small)
+    table.cell(t, 1, 8,  div_macd   ? "SI" : "-", text_color = div_macd   ? color.orange : color.gray, text_size = size.small)
+    table.cell(t, 0, 9,  "  BOS Fallido",text_color = color.silver, text_size = size.small)
+    table.cell(t, 1, 9,  bos_fail   ? "SI" : "-", text_color = bos_fail   ? color.red    : color.gray, text_size = size.small)
+    table.cell(t, 0, 10, "SCORE",         text_color = color.white,  text_size = size.normal)
+    table.cell(t, 1, 10, str.tostring(score) + " / 4",
+         text_color = score >= 3 ? color.red : score >= 2 ? color.orange : color.gray,
+         text_size = size.normal)

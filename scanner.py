@@ -58,6 +58,9 @@ from strategies import (
     SMACrossover,
     VolumeProfile,
     TrendExhaustion,
+    TrendExhaustionOpt,
+    MAOptima,
+    MA_OPTIMA_CONFIGS,
 )
 
 # ── Settings ───────────────────────────────────────────────────────────────────
@@ -118,8 +121,21 @@ def _build_exhaustion_strategies(ohlcv_dict: dict) -> dict:
         exhaustion_strategies[sym] = [
             TrendExhaustion(ohlcv=df, entry_score=3, exit_score=3),
             TrendExhaustion(ohlcv=df, entry_score=2, exit_score=2),
+            TrendExhaustionOpt(ohlcv=df, entry_score=3),
+            TrendExhaustionOpt(ohlcv=df, entry_score=2),
         ]
     return exhaustion_strategies
+
+
+def _build_ma_optima_strategies(prices_dict: dict) -> dict:
+    """Build per-symbol MA Optima strategies (optimized MA type/periods)."""
+    ma_strategies = {}
+    for sym, (ma_type, fast, slow) in MA_OPTIMA_CONFIGS.items():
+        if sym in prices_dict:
+            ma_strategies[sym] = MAOptima(
+                ma_type=ma_type, fast=fast, slow=slow, symbol=sym,
+            )
+    return ma_strategies
 
 
 def _build_pairs_strategies(prices_dict: dict) -> dict:
@@ -235,12 +251,14 @@ def main():
     pairs_strategies = _build_pairs_strategies(prices_dict)
     vol_strategies = _build_vol_strategies(ohlcv_dict)
     exhaustion_strategies = _build_exhaustion_strategies(ohlcv_dict)
+    ma_optima_strategies = _build_ma_optima_strategies(prices_dict)
     vol_count = sum(len(v) for v in vol_strategies.values())
     exh_count = sum(len(v) for v in exhaustion_strategies.values())
-    total = len(prices_dict) * len(strategies) + len(pairs_strategies) + vol_count + exh_count
+    ma_opt_count = len(ma_optima_strategies)
+    total = len(prices_dict) * len(strategies) + len(pairs_strategies) + vol_count + exh_count + ma_opt_count
     print(f"Running {len(strategies)} strategies × {len(prices_dict)} symbols "
           f"+ {len(pairs_strategies)} pairs + {vol_count} volume profile "
-          f"+ {exh_count} trend exhaustion ({total} backtests) ...\n")
+          f"+ {exh_count} trend exhaustion + {ma_opt_count} MA optima ({total} backtests) ...\n")
 
     results_flat = []
     done = 0
@@ -309,6 +327,21 @@ def main():
                 done += 1
                 if done % 10 == 0:
                     print(f"  {done}/{total} done ...")
+
+    # 2e. Run MA Optima backtests
+    for symbol, ma_strat in ma_optima_strategies.items():
+        if symbol in prices_dict:
+            result = run_backtest(prices_dict[symbol], ma_strat, config.INITIAL_CAPITAL)
+            results_flat.append({
+                "symbol":      symbol,
+                "strat_name":  ma_strat.name,
+                "strat_label": ma_strat.name,
+                "metrics":     result["metrics"],
+                "signals":     result["signals"],
+            })
+            done += 1
+            if done % 10 == 0:
+                print(f"  {done}/{total} done ...")
 
     # 3. Composite scores
     scores = _compute_scores(results_flat)

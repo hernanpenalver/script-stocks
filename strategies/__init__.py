@@ -13,6 +13,8 @@ from .mean_reversion import MeanReversion
 from .pairs_trading import PairsTrading
 from .volume_profile import VolumeProfile
 from .trend_exhaustion import TrendExhaustion
+from .trend_exhaustion_opt import TrendExhaustionOpt
+from .ma_optima import MAOptima, MA_OPTIMA_CONFIGS
 
 __all__ = [
     "BuyAndHold",
@@ -32,4 +34,7 @@ __all__ = [
     "PairsTrading",
     "VolumeProfile",
     "TrendExhaustion",
+    "TrendExhaustionOpt",
+    "MAOptima",
+    "MA_OPTIMA_CONFIGS",
 ]

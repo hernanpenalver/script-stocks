@@ -24,6 +24,9 @@ from strategies import (
     PairsTrading,
     VolumeProfile,
     TrendExhaustion,
+    TrendExhaustionOpt,
+    MAOptima,
+    MA_OPTIMA_CONFIGS,
 )
 
 # Pairs to trade: (asset_A, asset_B) — strategy runs on A, using B as reference
@@ -89,9 +92,19 @@ def build_strategies(prices: dict = None, ohlcv: dict = None):
             exhaustion_strategies[sym] = [
                 TrendExhaustion(ohlcv=df, entry_score=3, exit_score=3),
                 TrendExhaustion(ohlcv=df, entry_score=2, exit_score=2),
+                TrendExhaustionOpt(ohlcv=df, entry_score=3),
+                TrendExhaustionOpt(ohlcv=df, entry_score=2),
             ]
 
-    return base, pairs_strategies, vol_strategies, exhaustion_strategies
+    # Build MA Optima strategies (per symbol, uses optimized MA type/periods)
+    ma_optima_strategies = {}
+    for sym, (ma_type, fast, slow) in MA_OPTIMA_CONFIGS.items():
+        if prices and sym in prices:
+            ma_optima_strategies[sym] = MAOptima(
+                ma_type=ma_type, fast=fast, slow=slow, symbol=sym,
+            )
+
+    return base, pairs_strategies, vol_strategies, exhaustion_strategies, ma_optima_strategies
 
 
 def main():
@@ -124,7 +137,7 @@ def main():
     ohlcv = download_ohlcv(all_symbols, config.START_DATE, config.END_DATE)
 
     # 3. Build strategies
-    base_strategies, pairs_strategies, vol_strategies, exhaustion_strategies = build_strategies(prices, ohlcv)
+    base_strategies, pairs_strategies, vol_strategies, exhaustion_strategies, ma_optima_strategies = build_strategies(prices, ohlcv)
     print(f"\nStrategies: {[s.name for s in base_strategies]}")
     if pairs_strategies:
         print(f"Pairs:      {[(s, ps.name) for s, ps in pairs_strategies.items()]}")
@@ -174,6 +187,18 @@ def main():
                     print(f"  {symbol} | {es.name} | "
                           f"Return={result['metrics']['Total Return']}% "
                           f"Sharpe={result['metrics']['Sharpe']}")
+
+    # 4e. Run MA Optima backtests
+    if ma_optima_strategies:
+        from backtester import run_backtest
+        print("\nRunning MA Optima backtests ...")
+        for symbol, ma_strat in ma_optima_strategies.items():
+            if symbol in prices:
+                result = run_backtest(prices[symbol], ma_strat, config.INITIAL_CAPITAL)
+                results[symbol][ma_strat.name] = result
+                print(f"  {symbol} | {ma_strat.name} | "
+                      f"Return={result['metrics']['Total Return']}% "
+                      f"Sharpe={result['metrics']['Sharpe']}")
 
     # 5. Generate report
     output_path = os.path.join(os.path.dirname(__file__), "reporte.html")

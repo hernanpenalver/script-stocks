@@ -1,5 +1,6 @@
 SYMBOLS_USA = [
-    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN",       # Tech giants
+    "AAPL", "MSFT", "GOOGL", "AMZN",                 # Tech giants  (NVDA oculto temporalmente)
+    # "NVDA",                                          # Oculto: comportamiento atípico
     "META", "AVGO", "TSLA",                          # Tech / Semiconductor
     "BRK-B", "JPM", "V",                             # Financials
     "LLY", "XOM",                                    # Pharma / Energy
