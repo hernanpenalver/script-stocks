@@ -12,6 +12,7 @@ from .adx import ADXTrend
 from .mean_reversion import MeanReversion
 from .pairs_trading import PairsTrading
 from .volume_profile import VolumeProfile
+from .trend_exhaustion import TrendExhaustion
 
 __all__ = [
     "BuyAndHold",
@@ -30,4 +31,5 @@ __all__ = [
     "MeanReversion",
     "PairsTrading",
     "VolumeProfile",
+    "TrendExhaustion",
 ]

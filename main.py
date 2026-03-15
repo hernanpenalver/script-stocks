@@ -23,6 +23,7 @@ from strategies import (
     MeanReversion,
     PairsTrading,
     VolumeProfile,
+    TrendExhaustion,
 )
 
 # Pairs to trade: (asset_A, asset_B) — strategy runs on A, using B as reference
@@ -81,7 +82,16 @@ def build_strategies(prices: dict = None, ohlcv: dict = None):
                 VolumeProfile(volume=df["Volume"], lookback=120, exit_at="vah"),
             ]
 
-    return base, pairs_strategies, vol_strategies
+    # Build trend exhaustion strategies (per symbol, needs OHLCV data)
+    exhaustion_strategies = {}
+    if ohlcv:
+        for sym, df in ohlcv.items():
+            exhaustion_strategies[sym] = [
+                TrendExhaustion(ohlcv=df, entry_score=3, exit_score=3),
+                TrendExhaustion(ohlcv=df, entry_score=2, exit_score=2),
+            ]
+
+    return base, pairs_strategies, vol_strategies, exhaustion_strategies
 
 
 def main():
@@ -114,7 +124,7 @@ def main():
     ohlcv = download_ohlcv(all_symbols, config.START_DATE, config.END_DATE)
 
     # 3. Build strategies
-    base_strategies, pairs_strategies, vol_strategies = build_strategies(prices, ohlcv)
+    base_strategies, pairs_strategies, vol_strategies, exhaustion_strategies = build_strategies(prices, ohlcv)
     print(f"\nStrategies: {[s.name for s in base_strategies]}")
     if pairs_strategies:
         print(f"Pairs:      {[(s, ps.name) for s, ps in pairs_strategies.items()]}")
@@ -149,6 +159,19 @@ def main():
                     result = run_backtest(prices[symbol], vs, config.INITIAL_CAPITAL)
                     results[symbol][vs.name] = result
                     print(f"  {symbol} | {vs.name} | "
+                          f"Return={result['metrics']['Total Return']}% "
+                          f"Sharpe={result['metrics']['Sharpe']}")
+
+    # 4d. Run trend exhaustion backtests
+    if exhaustion_strategies:
+        from backtester import run_backtest
+        print("\nRunning trend exhaustion backtests ...")
+        for symbol, ex_strats in exhaustion_strategies.items():
+            if symbol in prices:
+                for es in ex_strats:
+                    result = run_backtest(prices[symbol], es, config.INITIAL_CAPITAL)
+                    results[symbol][es.name] = result
+                    print(f"  {symbol} | {es.name} | "
                           f"Return={result['metrics']['Total Return']}% "
                           f"Sharpe={result['metrics']['Sharpe']}")
 

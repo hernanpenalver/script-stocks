@@ -57,6 +57,7 @@ from strategies import (
     RSIWithStopLoss,
     SMACrossover,
     VolumeProfile,
+    TrendExhaustion,
 )
 
 # ── Settings ───────────────────────────────────────────────────────────────────
@@ -108,6 +109,17 @@ def _build_vol_strategies(ohlcv_dict: dict) -> dict:
             VolumeProfile(volume=df["Volume"], lookback=120, exit_at="vah"),
         ]
     return vol_strategies
+
+
+def _build_exhaustion_strategies(ohlcv_dict: dict) -> dict:
+    """Build per-symbol trend exhaustion strategies."""
+    exhaustion_strategies = {}
+    for sym, df in ohlcv_dict.items():
+        exhaustion_strategies[sym] = [
+            TrendExhaustion(ohlcv=df, entry_score=3, exit_score=3),
+            TrendExhaustion(ohlcv=df, entry_score=2, exit_score=2),
+        ]
+    return exhaustion_strategies
 
 
 def _build_pairs_strategies(prices_dict: dict) -> dict:
@@ -222,10 +234,13 @@ def main():
     strategies = _build_strategies()
     pairs_strategies = _build_pairs_strategies(prices_dict)
     vol_strategies = _build_vol_strategies(ohlcv_dict)
+    exhaustion_strategies = _build_exhaustion_strategies(ohlcv_dict)
     vol_count = sum(len(v) for v in vol_strategies.values())
-    total = len(prices_dict) * len(strategies) + len(pairs_strategies) + vol_count
+    exh_count = sum(len(v) for v in exhaustion_strategies.values())
+    total = len(prices_dict) * len(strategies) + len(pairs_strategies) + vol_count + exh_count
     print(f"Running {len(strategies)} strategies × {len(prices_dict)} symbols "
-          f"+ {len(pairs_strategies)} pairs + {vol_count} volume profile ({total} backtests) ...\n")
+          f"+ {len(pairs_strategies)} pairs + {vol_count} volume profile "
+          f"+ {exh_count} trend exhaustion ({total} backtests) ...\n")
 
     results_flat = []
     done = 0
@@ -272,6 +287,22 @@ def main():
                     "symbol":      symbol,
                     "strat_name":  vs.name,
                     "strat_label": vs.name,
+                    "metrics":     result["metrics"],
+                    "signals":     result["signals"],
+                })
+                done += 1
+                if done % 10 == 0:
+                    print(f"  {done}/{total} done ...")
+
+    # 2d. Run trend exhaustion backtests
+    for symbol, ex_strats in exhaustion_strategies.items():
+        if symbol in prices_dict:
+            for es in ex_strats:
+                result = run_backtest(prices_dict[symbol], es, config.INITIAL_CAPITAL)
+                results_flat.append({
+                    "symbol":      symbol,
+                    "strat_name":  es.name,
+                    "strat_label": es.name,
                     "metrics":     result["metrics"],
                     "signals":     result["signals"],
                 })
