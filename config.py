@@ -6,7 +6,7 @@ SYMBOLS_USA = [
     "LLY", "XOM",                                    # Pharma / Energy
 ]
 SYMBOLS_ARG = ["YPF", "GGAL", "BMA", "TS", "MELI", "PAM"]  # ADRs en NYSE/NASDAQ
-SYMBOLS_ETF = ["QQQ"]                                # ETFs benchmark
+SYMBOLS_ETF = ["QQQ", "SPY"]                         # ETFs benchmark
 START_DATE = "2015-01-01"
-END_DATE = "2024-12-31"
+END_DATE = "2026-03-16"
 INITIAL_CAPITAL = 10_000.0

@@ -31,7 +31,7 @@ FIRST-TIME SETUP
 
 import os
 import sys
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
@@ -226,7 +226,7 @@ def _format_message(
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     today    = date.today()
-    end_date = today.strftime("%Y-%m-%d")
+    end_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
     run_date = today.strftime("%Y-%m-%d")
 
     print("=" * 55)
