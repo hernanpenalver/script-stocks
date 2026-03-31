@@ -43,17 +43,13 @@ from data_loader import download_prices, download_ohlcv
 from strategies import (
     ADXTrend,
     BollingerBands,
-    BuyAndHold,
     DonchianBreakout,
     MACDOptimized,
-    MACDStrategy,
-    MACDWithStopLoss,
     MeanReversion,
     Momentum,
     PairsTrading,
     RSIBollinger,
     RSIPercentile,
-    RSIStrategy,
     RSIWithStopLoss,
     SMACrossover,
     VolumeProfile,
@@ -79,27 +75,17 @@ PAIRS = [
 
 def _build_strategies():
     return [
-        BuyAndHold(),
-        SMACrossover(fast=20, slow=50),
         SMACrossover(fast=50, slow=200),
-        RSIStrategy(period=14, oversold=30, overbought=70),
         RSIWithStopLoss(period=14, oversold=30, overbought=70),
         RSIPercentile(period=14, low_pct=0.10, high_pct=0.90),
-        MACDStrategy(fast=12, slow=26, signal=9),
-        MACDWithStopLoss(fast=12, slow=26, signal=9, sl_threshold=0.005),
         MACDOptimized(train_ratio=0.70),
         BollingerBands(period=20, num_std=2.0),
-        BollingerBands(period=20, num_std=2.5, exit_at_mid=True),
-        BollingerBands(period=20, num_std=3.0, exit_at_mid=True),
         RSIBollinger(bb_period=20, bb_std=2.0, rsi_period=14, oversold=30, overbought=70),
         Momentum(lookback=252, skip=21),
-        DonchianBreakout(entry_period=20, exit_period=10),
         DonchianBreakout(entry_period=55, exit_period=20),
         ADXTrend(period=14, threshold=25),
         MeanReversion(period=20, entry_std=1.5),
         MeanReversion(period=50, entry_std=2.0),
-        MeanReversion(period=20, entry_std=2.5, exit_std=0.5),
-        MeanReversion(period=50, entry_std=3.0, exit_std=0.5),
     ]
 
 
@@ -109,7 +95,6 @@ def _build_vol_strategies(ohlcv_dict: dict) -> dict:
     for sym, df in ohlcv_dict.items():
         vol_strategies[sym] = [
             VolumeProfile(volume=df["Volume"], lookback=60, exit_at="poc"),
-            VolumeProfile(volume=df["Volume"], lookback=120, exit_at="vah"),
         ]
     return vol_strategies
 
@@ -120,9 +105,7 @@ def _build_exhaustion_strategies(ohlcv_dict: dict) -> dict:
     for sym, df in ohlcv_dict.items():
         exhaustion_strategies[sym] = [
             TrendExhaustion(ohlcv=df, entry_score=3, exit_score=3),
-            TrendExhaustion(ohlcv=df, entry_score=2, exit_score=2),
             TrendExhaustionOpt(ohlcv=df, entry_score=3),
-            TrendExhaustionOpt(ohlcv=df, entry_score=2),
         ]
     return exhaustion_strategies
 
